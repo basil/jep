@@ -1,4 +1,4 @@
-= JEP-0000: :bulb: Title :bulb:
+= JEP-0000: Jakarta EE 9 Migration
 :toc: preamble
 :toclevels: 3
 ifdef::env-github[]
@@ -9,27 +9,6 @@ ifdef::env-github[]
 :warning-caption: :warning:
 endif::[]
 
-.**JEP Template**
-[TIP]
-====
-In this document, all text in a "Tip" block (or inline text with with a ":bulb:" on either side)
-MUST be removed and/or replaced with text appropriate to this JEP before submission.
-
-Sections may include additional help and advice in comments.
-":bulb:" entries in comments only need to be filled in if that text is uncommented.
-
-See https://github.com/jenkinsci/jep/blob/master/jep/1/README.adoc[JEP-1] for full and accurate description of the JEP process and what is required in each section.
-====
-
-[TIP]
-====
-*BDFL-Delegate* is uncommented by default.
-As part of the in initial conversation or the JEP submission the sponsor should
-look for a BDFL Delegate.
-While not required, it is better for the community if Delegates perform most reviews.
-If no suitable BDFL-Delegate can be found, that row may be commented out.
-====
-
 .Metadata
 [cols="1h,1"]
 |===
@@ -37,20 +16,19 @@ If no suitable BDFL-Delegate can be found, that row may be commented out.
 | 0000
 
 | Title
-| :bulb: Title :bulb:
+| Jakarta EE 9 Migration
 
 | Sponsor
-| :bulb: Link to github user page (if multiple, comma separated on one line). Example: link:https://github.com/username[User Name], link:https://github.com/username2[User Name 2] :bulb:
+| link:https://github.com/basil[Basil Crow]
 
-// Use the script `set-jep-status <jep-number> <status>` to update the status.
 | Status
-| Not Submitted :information_source:
+| Draft :speech_balloon:
 
 | Type
-| :bulb: Standards, Informational, or Process :bulb:
+| Informational
 
 | Created
-| :bulb: Date (YYYY-MM-DD) :bulb:
+| Date 2024-03-19
 
 | BDFL-Delegate
 | TBD
@@ -59,55 +37,157 @@ If no suitable BDFL-Delegate can be found, that row may be commented out.
 //
 // Uncomment if there is an associated placeholder JIRA issue.
 //| JIRA
-//| :bulb: https://issues.jenkins-ci.org/browse/JENKINS-nnnnn[JENKINS-nnnnn] :bulb:
+//| https://issues.jenkins-ci.org/browse/JENKINS-nnnnn[JENKINS-nnnnn]
 //
 //
 // Uncomment if discussion will occur in forum other than jenkinsci-dev@ mailing list.
 //| Discussions-To
-//| :bulb: Link to where discussion and final status announcement will occur :bulb:
+//| Link to where discussion and final status announcement will occur
 //
 //
 // Uncomment if this JEP depends on one or more other JEPs.
 //| Requires
-//| :bulb: JEP-NUMBER, JEP-NUMBER... :bulb:
+//| JEP-NUMBER, JEP-NUMBER...
 //
 //
 // Uncomment and fill if this JEP is rendered obsolete by a later JEP
 //| Superseded-By
-//| :bulb: JEP-NUMBER :bulb:
+//| JEP-NUMBER
 //
 //
 // Uncomment when this JEP status is set to Accepted, Rejected or Withdrawn.
 //| Resolution
-//| :bulb: Link to relevant post in the jenkinsci-dev@ mailing list archives :bulb:
+//| Link to relevant post in the jenkinsci-dev@ mailing list archives
 
 |===
 
 == Abstract
 
-[TIP]
-====
-Give a short (200 word) description of the technical issue addressed.
+Servlet API 4.x, which delivers `javax.servlet` packages, is replaced with the latest version of Servlet API (6.x at the time of this writing), which delivers `jakarta.servlet` packages.
+Jetty 10.x, which only supports `javax.servlet` packages, is replaced with the latest version of Jetty (12.x at the time of this writing), which supports `jakarta.servlet` packages.
+Spring Security and its dependency Spring Framework 5.x, which only support `javax.servlet` packages, are replaced with the latest versions (6.x at the time of this writing), which support `jakarta.servlet` packages and require Java 17 or newer.
+Commons FileUpload 1.x, which only supports `javax.servlet` packages, is replaced with the latest version (2.x at the time of this writing), which supports `jakarta.servlet` packages.
 
-* Use present tense - describe what the proposal "does" (as if it were already done), not what it will do.
-* Do not go into technical details and instead put those in the Specification section.
-* Do not talk about history or why this needs to be done. Instead, add the history to the Motivation section.
-====
+Jenkins core and core components, including the Jenkins test harness (JTH) are fully migrated to the above releases and `jakarta.servlet` packages.
+For compatibility, bridge methods are added to offer a modicum of backward compatibility for the many plugins referring to the old packages.
+Key plugins are patched when necessary to ensure the use of the new packages in the (rare) absence of bridge methods.
 
 == Motivation
 
-[TIP]
-====
-Explain why the existing code base or process is inadequate to address the problem that the JEP solves.
-This section may also contain any historical context such as how things were done before this proposal.
+=== Security updates
 
-* Provide a clear description of the high-level problem you are trying to solve.
-* The problem statement should be written in terms of a specific symptom that affects users, contributors, or the project as a whole.
-* The problem statement should not be written in terms of the solution.
-* Do not discuss design choices or alternative designs that were rejected - those belong in the Reasoning section.
-====
+Staying on an old version of Spring Security places the project at risk of not receiving upstream security updates.
+In the case of exploitable vulnerabilities, this requires the project to develop or backport security updates independently,
+which is significantly more effort than applying an upstream security update.
+Many security-conscious organizations using, or planning to use, Jenkins run off-the-shelf security scanners to look for known vulnerabilities.
+Regardless of whether or not a vulnerability is exploitable, such scanners will flag old versions of libraries as susceptible to exploitation,
+and it is time-consuming for the https://www.jenkins.io/security/team/[security team] to respond to purported security reports and for users to justify exemptions from policy to use Jenkins anyway.
+
+=== Technical debt
+
+Staying on an old version of Spring Security introduces a maintenance burden for Jenkins developers.
+The rest of the Java ecosystem will increasingly shift its focus to `jakarta.servlet` packages,
+in part catalyzed by the Spring project's schedule.
+As this shift occurs, unmaintainable workarounds will increasingly be needed to retain the old version of Spring Security.
 
 == Reasoning
+
+=== Status quo
+
+Continuing to use Servlet API 4.x indefinitely does not seem sustainable.
+The last 5.x releases of Spring Security and its dependency Spring Framework will be published in https://spring.io/blog/2024/03/01/support-timeline-announcement-for-spring-framework-6-0-x-and-5-3-x[August 2024, with the official end of open source support on August 31, 2024].
+The subsequent 6.x releases require both `jakarta.servlet` packages and Java 17 or newer.
+The use of `jakarta.servlet` packages in turn requires upgrading Jetty and Commons FileUpload.
+Failure to upgrade to these releases puts the project at risk of not receiving upstream bug fixes and security updates.
+
+On its own, an upgrade of all of the above libraries would severely break compatibility with plugins throughout the Jenkins ecosystem.
+Plugins that link against the old `javax.servlet` packages would stop working when core is upgraded to `jakarta.servlet` packages, motivating the need for a migration plan.
+
+=== Prerequisites
+
+The actions outlined in this document assume that Jenkins requires Java 17 or newer.
+Combining a Java upgrade with the migration outlined in this document would conflate two separate but related issues and make the document more difficult to read.
+Furthermore, Java upgrades are a routine process not tied to this migration and therefore deserve a separate Jenkins Enhancement Proposal (JEP).
+Therefore, this document assumes that a routine migration to Java 17 has already taken place and only describes the steps required after that to migrate to `jakarta.servlet` packages.
+
+=== High-level solution
+
+At a high level, perform a classic two-phase migration.
+In the first phase, switch the implementation to `jakarta.servlet` packages and begin providing support for plugins that link against `jakarta.servlet` packages while retaining support for plugins that link against `javax.servlet` packages;
+in other words, add a new capability and deprecate the old capability.
+In particular, implement support for the deprecated old capability in terms of the new capability through a compatibility subsystem; namely, bridge methods.
+In the short term, plugin consumers that rely on the old capability will continue to work through the compatibility subsystem.
+In the medium term, migrate the plugins in the Bill of Materials (BOM) to the new capability, mitigating both risk of regression and technical debt.
+In the long term, migrate the long tail of plugins to the new capability, completing the migration.
+
+Why follow such a phased approach?
+Not developing a compatibility subsystem would be too disruptive of a change.
+Almost all plugins would need to be upgraded in lockstep with core,
+which would be prohibitively difficult to coordinate from the perspective of both maintainers and end users.
+
+Implementing the compatibility subsystem in terms of the new functionality decreases technical debt.
+Compatibility subsystems that retain the old interface and the old implementation require maintenance of both the old implementation and new.
+By implementing the old interface in terms of the new implementation, this design reduces the maintenance burden from two implementations to one.
+
+Delaying the migration of plugins to the new interface increases both risk of regression and technical debt.
+It increases risk of regression because the compatibility subsystem is necessarily incomplete,
+and automated tests might not expose all functionality that is not covered by the compatibility subsystem.
+It increases technical debt because because the migration will have to be done eventually,
+and if it is not done in a timely fashion it will likely delay a future project.
+As such, it is important to migrate the plugins in the BOM away from the compatibility subsystem in a timely fashion,
+ideally before the change ships in a Long Term Support (LTS) release.
+
+The same concerns apply to the long tail of plugins not in the BOM, but with less urgency due to lower adoption rates.
+However, this does not imply that the migration can be postponed indefinitely, as waiting too long can burden developers working on unrelated changes.
+We suggest performing the long tail migration, defined conservatively as anything with over 10,000 installations, within a maximum of nine (9) months after the changes have been delivered in an LTS release.
+
+== Phase 1: Kickoff
+
+Fully migrate Jenkins core and core components, including the Jenkins test harness (JTH), to the latest upstream releases and `jakarta.servlet` packages.
+Add bridge methods to offer backward compatibility for the vast majority of method calls used by existing plugins.
+For the handful of method calls that cannot be easily bridged, prepare plugins in advance to use the new `jakarta.servlet` packages,
+noting that this implies selecting a weekly release as the core baseline.
+Get a successful PCT test run with all of the above updates, giving us confidence to release to production.
+Release a core weekly containing all of the above changes, and release the plugins prepared above at the same time.
+Document in the core release notes that the plugins prepared above must be upgraded in lockstep with core.
+Congratulations! You have now added a new capability to a Jenkins weekly without breaking compatibility.
+You have also kicked off a migration that must be completed soon.
+
+== Phase 2: Top 250 plugins
+
+The majority of Jenkins plugins will now be running successfully through the compatibility subsystem.
+
+== Phase 3: Long tail plugins
+
+Provide
+For compatibility, bridge methods are added to offer a modicum of backward compatibility for the many plugins referring to the old packages.
+Key plugins are patched when necessary to ensure the use of the new packages in the (rare) absence of bridge methods.
+
+
+
+
+
+=== Upgrade Spring Security but not Jakarta Servlet
+
+Version 6.x of Spring Security and its dependency Spring Framework officially requires `jakarta.servlet` imports,
+but it is unclear how much of the portion of Spring Security which references Servlet API types we actually use.
+It might be possible to continue to use `javax.servlet` generally and in the meantime only bridge to `jakarta.servlet` for the more limited needs of the specific functionality we consume,
+which likely only call a handful of routine methods like getting/setting headers and session attributes.
+
+This is a short-term approach that would address the security portion of the Motivation section without addressing the technical debt portion.
+On the contrary, it is an example of the "unmaintainable workarounds" described in that section.
+
+=== 
+
+
+
+
+
+
+== Reasoning
+
+
+
 
 [TIP]
 ====
@@ -124,6 +204,13 @@ Provide evidence of consensus within the community and discuss important objecti
 ====
 
 == Specification
+
+* Upgrade Jetty to the latest version in Winstone, Stapler, core, and the Jenkins test harness.
+* Upgrade the versions of `jakarta.servlet.jsp.jstl-api`, `jakarta.servlet-api`, and `jakarta.servlet.jsp-api` in Jelly, Stapler, and core to match those of the aforementioned Jetty version.
+* Upgrade Commons FileUpload to the latest version in Stapler and core.
+* Upgrade Spring Framework and Spring Security to the latest versions in core.
+* Upgrade Winstone to the latest versions in core.
+* Upgrade the Jenkins test harness to the latest version in core.
 
 [TIP]
 ====
@@ -275,6 +362,3 @@ JEPs that do not include a prototype implementation may omit this section.
 Provide links to any related documents.
 This will include links to discussions on the mailing list, pull requests, and meeting notes.
 ====
-
-
-
